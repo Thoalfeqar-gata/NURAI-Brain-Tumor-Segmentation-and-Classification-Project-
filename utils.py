@@ -1,9 +1,5 @@
-import torch
-import torchvision
-import torch.nn as nn
-import os, numpy as np, matplotlib.pyplot as plt, pandas as pd, cv2, random
+import cv2, numpy as np
 from PIL import Image
-from model import BrainTumorModel
 
 class CLAHETransform:
     def __init__(self, clipLimit=2.0, tileGridSize=(8,8)):
