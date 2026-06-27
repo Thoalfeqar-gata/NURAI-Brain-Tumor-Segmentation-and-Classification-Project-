@@ -1,8 +1,11 @@
 import torch
+import torch.nn as nn
 import torchvision
 import cv2, numpy as np, os
 from torch.utils.data import Dataset
+from torch.nn import functional as F
 from PIL import Image
+from torchvision.transforms import v2
 
 
 class PretrainingDataset(torchvision.datasets.ImageFolder):
@@ -122,8 +125,67 @@ class SegmentationDataset(torch.utils.data.Dataset):
         else:
             image = image.to(dtype=torch.float32) / 255.0
 
+        image = v2.functional.resize(image, size = (224, 224), interpolation = v2.functional.InterpolationMode.BILINEAR)
+        mask = v2.functional.resize(mask, size = (224, 224), interpolation = v2.functional.InterpolationMode.NEAREST)
         return image, mask, class_id
 
+
+class DiceLoss(nn.Module):
+    def __init__(self, smooth=1e-6):
+        super(DiceLoss, self).__init__()
+        self.smooth = smooth
+
+    def forward(self, logits, targets):
+        # 1. Apply sigmoid to convert raw logits to probabilities (0 to 1)
+        probs = torch.sigmoid(logits)
+        
+        # 2. Flatten both tensors to 1D arrays for easy mathematical operations
+        probs_flat = probs.view(-1)
+        targets_flat = targets.view(-1)
+        
+        # 3. Calculate intersection and union
+        intersection = (probs_flat * targets_flat).sum()
+        union = probs_flat.sum() + targets_flat.sum()
+        
+        # 4. Compute the Dice score using the smoothing factor
+        dice_score = (2. * intersection + self.smooth) / (union + self.smooth)
+        
+        # 5. Return the loss (1 - score), as PyTorch optimizers minimize values
+        return 1. - dice_score
+    
+
+def calculate_iou(pred_logits, true_mask, threshold=0.5, smooth=1e-5):
+    # 1. Apply sigmoid and cast to float inside the function
+    probs = torch.sigmoid(pred_logits)
+    pred_binary = (probs > threshold).float()
+    
+    # 2. Flatten
+    pred_flat = pred_binary.view(pred_binary.size(0), -1)
+    true_flat = true_mask.view(true_mask.size(0), -1)
+    
+    # 3. Math
+    intersection = (pred_flat * true_flat).sum(dim=1)
+    union = pred_flat.sum(dim=1) + true_flat.sum(dim=1) - intersection
+    
+    iou = (intersection + smooth) / (union + smooth)
+    return iou.mean().item()
+
+def calculate_dice(pred_logits, true_mask, threshold=0.5, smooth=1e-5):
+    # 1. Apply sigmoid and cast to float inside the function
+    probs = torch.sigmoid(pred_logits)
+    pred_binary = (probs > threshold).float()
+    
+    # 2. Flatten
+    pred_flat = pred_binary.view(pred_binary.size(0), -1)
+    true_flat = true_mask.view(true_mask.size(0), -1)
+    
+    # 3. Math
+    intersection = (pred_flat * true_flat).sum(dim=1)
+    predicted_sum = pred_flat.sum(dim=1)
+    true_sum = true_flat.sum(dim=1)
+    
+    dice = (2.0 * intersection + smooth) / (predicted_sum + true_sum + smooth)
+    return dice.mean().item()
 
 
 class CLAHETransform:

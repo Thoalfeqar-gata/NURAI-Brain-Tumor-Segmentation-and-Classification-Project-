@@ -37,10 +37,10 @@ class MLPDecoder(nn.Module):
     
 
 class BrainTumorModel(nn.Module):
-    def __init__(self, num_classes = 4, out_channels = 1, dropout_ratio = 0.1, upscale_factor = 4):
+    def __init__(self, backbone_name = 'davit_tiny.msft_in1k', num_classes = 4, out_channels = 1, dropout_ratio = 0.1, upscale_factor = 4):
         super(BrainTumorModel, self).__init__()
         # Backbone with features_only=True to extract multiscale intermediate features
-        self.backbone = timm.create_model('davit_tiny.msft_in1k', pretrained = True, features_only = True)
+        self.backbone = timm.create_model(backbone_name, pretrained = True, features_only = True)
         
         # Dynamically query the backbone's stage channel dimensions to adapt the decoder and head
         channel_dims = self.backbone.feature_info.channels()
